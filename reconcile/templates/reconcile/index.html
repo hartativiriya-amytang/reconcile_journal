@@ -1,0 +1,123 @@
+{% extends 'reconcile/base.html' %}
+
+{% block title %}Home - Data Reconciliation{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0"><i class="fas fa-history"></i> Reconciliation Sessions</h4>
+                <a href="{% url 'configure_fields' %}" class="btn btn-light">
+                    <i class="fas fa-plus"></i> New Reconciliation
+                </a>
+            </div>
+            <div class="card-body">
+                {% if sessions %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Config</th>
+                                    <th>File A</th>
+                                    <th>File B</th>
+                                    <th>Status</th>
+                                    <th>Records</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for session in sessions %}
+                                    <tr>
+                                        <td>#{{ session.id }}</td>
+                                        <td>{{ session.config.name }}</td>
+                                        <td>{{ session.file_a_name|truncatechars:20 }}</td>
+                                        <td>{{ session.file_b_name|truncatechars:20 }}</td>
+                                        <td>
+                                            <span class="badge 
+                                                {% if session.status == 'completed' %}bg-success
+                                                {% elif session.status == 'processing' %}bg-warning
+                                                {% elif session.status == 'failed' %}bg-danger
+                                                {% else %}bg-secondary{% endif %}">
+                                                {{ session.get_status_display }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <small>
+                                                M: {{ session.matched_count }} | 
+                                                A: {{ session.only_a_count }} | 
+                                                B: {{ session.only_b_count }}
+                                            </small>
+                                        </td>
+                                        <td>{{ session.created_at|date:"Y-m-d H:i" }}</td>
+                                        <td>
+                                            {% if session.status == 'completed' %}
+                                                <a href="{% url 'view_results' session.id %}" class="btn btn-sm btn-primary">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                            {% else %}
+                                                <span class="text-muted">Processing...</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-file-excel fa-3x text-muted mb-3"></i>
+                        <h5>No reconciliation sessions yet</h5>
+                        <p class="text-muted">Start by configuring your fields and uploading files</p>
+                        <a href="{% url 'configure_fields' %}" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Get Started
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <h5><i class="fas fa-info-circle text-primary"></i> How It Works</h5>
+                <div class="row mt-3">
+                    <div class="col-md-3 text-center">
+                        <div class="bg-light p-3 rounded">
+                            <i class="fas fa-cog fa-2x text-primary"></i>
+                            <h6>1. Configure Fields</h6>
+                            <small class="text-muted">Define up to 12 fields and matching criteria</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="bg-light p-3 rounded">
+                            <i class="fas fa-upload fa-2x text-success"></i>
+                            <h6>2. Upload Files</h6>
+                            <small class="text-muted">Upload two Excel files for reconciliation</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="bg-light p-3 rounded">
+                            <i class="fas fa-sync fa-2x text-warning"></i>
+                            <h6>3. Process</h6>
+                            <small class="text-muted">System compares data based on matching rules</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 text-center">
+                        <div class="bg-light p-3 rounded">
+                            <i class="fas fa-download fa-2x text-info"></i>
+                            <h6>4. Download Results</h6>
+                            <small class="text-muted">Download matched and unmatched data</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

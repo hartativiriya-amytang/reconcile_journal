@@ -1,0 +1,84 @@
+{% extends 'reconcile/base.html' %}
+
+{% block title %}Upload Files - Data Reconciliation{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h4 class="mb-0"><i class="fas fa-upload"></i> Upload Files for Reconciliation</h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <h6><i class="fas fa-info-circle"></i> Configuration Summary</h6>
+                    <table class="table table-sm table-borderless">
+                        <tr>
+                            <td><strong>Configuration:</strong></td>
+                            <td>{{ config.name }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Fields:</strong></td>
+                            <td>
+                                {% for field in fields %}
+                                    <span class="badge bg-secondary">{{ field.field_code }}</span>
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>Matching Fields:</strong></td>
+                            <td>
+                                {% for field in fields %}
+                                    {% if field.is_matching_criteria %}
+                                        <span class="badge bg-primary">{{ field.field_name }}</span>
+                                    {% endif %}
+                                {% endfor %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+
+                <form method="POST" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">File A</label>
+                            <div class="border rounded p-3 text-center">
+                                <input type="file" name="file_a" class="form-control" accept=".xlsx,.xls" required>
+                                <small class="text-muted">Excel file (.xlsx, .xls)</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">File B</label>
+                            <div class="border rounded p-3 text-center">
+                                <input type="file" name="file_b" class="form-control" accept=".xlsx,.xls" required>
+                                <small class="text-muted">Excel file (.xlsx, .xls)</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Important:</strong> Ensure your Excel files have column headers that match the configured field names.
+                        <ul class="mt-2 mb-0">
+                            {% for field in fields %}
+                                <li><strong>{{ field.field_code }}</strong> = {{ field.field_name }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+
+                    <div class="text-end">
+                        <a href="{% url 'configure_fields' %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back
+                        </a>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-play"></i> Start Reconciliation
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
