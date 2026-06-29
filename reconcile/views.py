@@ -1,31 +1,15 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse
 from django.contrib import messages
-from django.views.decorators.csrf import csrf_exempt
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
-import json
-import os
-from datetime import datetime
-
-from .models import ReconciliationConfig, ReconciliationField, ReconciliationSession
-from .services.reconciliation import ReconciliationService
-from .services.export_excel import ExcelExporter
-from .services.excel_parser import ExcelParser
-
-
-from django.shortcuts import render, redirect, get_object_or_404
-from django.http import JsonResponse, HttpResponse
-from django.contrib import messages
-from django.views.decorators.csrf import csrf_exempt
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
-import json
-import os
+from django.core.files.uploadedfile import SimpleUploadedFile
 from datetime import datetime
 import pandas as pd
+import json
+import os
 
-from .models import ReconciliationConfig, ReconciliationField, ReconciliationSession
+from .models import ReconciliationConfig, ReconciliationField, ReconciliationSession, ReconciliationResult
 from .services.reconciliation import ReconciliationService
 from .services.export_excel import ExcelExporter
 from .services.excel_parser import ExcelParser
@@ -39,8 +23,6 @@ def index(request):
     except Exception as e:
         messages.error(request, f'Error loading sessions: {str(e)}')
         return render(request, 'reconcile/index.html', {'sessions': []})
-
-
 
 
 def configure_fields(request):
@@ -176,7 +158,7 @@ def upload_files(request):
                 status='processing'
             )
             
-            # Get field mapping (for now, assume column headers match field names)
+            # Get field mapping
             fields = config.fields.all()
             field_mapping = {field.field_name: field.field_name for field in fields}
             
@@ -187,19 +169,18 @@ def upload_files(request):
                 field_mapping=field_mapping
             )
             
-            # Need to re-read files since we saved them
-            from django.core.files import File
+            # Re-read files for processing
             with default_storage.open(file_a_path, 'rb') as f_a, default_storage.open(file_b_path, 'rb') as f_b:
-                # Create temporary UploadedFile objects
-                from django.core.files.uploadedfile import SimpleUploadedFile
-                
-                # Read file content
-                f_a.seek(0)
-                f_b.seek(0)
-                
-                temp_file_a = SimpleUploadedFile(file_a.name, f_a.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-                temp_file_b = SimpleUploadedFile(file_b.name, f_b.read(), content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-                
+                temp_file_a = SimpleUploadedFile(
+                    file_a.name, 
+                    f_a.read(), 
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
+                temp_file_b = SimpleUploadedFile(
+                    file_b.name, 
+                    f_b.read(), 
+                    content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
                 results = service.process_files(temp_file_a, temp_file_b)
             
             if results.get('status') == 'failed':
@@ -233,7 +214,6 @@ def upload_files(request):
             return redirect('upload_files')
     
     # GET request
-    # Get field mapping for display
     fields = config.fields.all()
     
     return render(request, 'reconcile/upload_files.html', {
@@ -251,12 +231,16 @@ def view_results(request, session_id):
     # Get distinct field names from results
     field_names = []
     if results.exists():
-        # Try to get fields from first result
         first_result = results.first()
         if first_result.file_a_data:
             field_names = list(first_result.file_a_data.keys())
         elif first_result.file_b_data:
             field_names = list(first_result.file_b_data.keys())
+    
+    # Calculate match rate
+    match_rate = 0
+    if session.total_records_a > 0:
+        match_rate = (session.matched_count / session.total_records_a) * 100
     
     return render(request, 'reconcile/view_results.html', {
         'session': session,
@@ -268,6 +252,7 @@ def view_results(request, session_id):
             'matched': session.matched_count,
             'only_a': session.only_a_count,
             'only_b': session.only_b_count,
+            'match_rate': match_rate
         }
     })
 
@@ -293,13 +278,15 @@ def download_matched(request, session_id):
     for result in results:
         row = {
             'Status': 'MATCH',
-            **{f'File_A_{field}': result.file_a_data.get(field, '') for field in fields},
-            **{f'File_B_{field}': result.file_b_data.get(field, '') for field in fields}
         }
+        for field in fields:
+            row[f'File_A_{field}'] = result.file_a_data.get(field, '')
+            row[f'File_B_{field}'] = result.file_b_data.get(field, '')
         data.append(row)
     
     # Export to Excel
-    return ExcelExporter._create_excel_response(pd.DataFrame(data), f'matched_data_{session_id}.xlsx')
+    df = pd.DataFrame(data)
+    return ExcelExporter._create_excel_response(df, f'matched_data_{session_id}.xlsx')
 
 
 def download_unmatched(request, session_id):
@@ -324,20 +311,21 @@ def download_unmatched(request, session_id):
     for result in only_a_results:
         row = {
             'Status': 'ONLY_FILE_A',
-            **{field: result.file_a_data.get(field, '') for field in fields}
         }
+        for field in fields:
+            row[field] = result.file_a_data.get(field, '')
         data_a.append(row)
     
     data_b = []
     for result in only_b_results:
         row = {
             'Status': 'ONLY_FILE_B',
-            **{field: result.file_b_data.get(field, '') for field in fields}
         }
+        for field in fields:
+            row[field] = result.file_b_data.get(field, '')
         data_b.append(row)
     
     # Create Excel with multiple sheets
-    import pandas as pd
     from io import BytesIO
     
     output = BytesIO()
@@ -401,7 +389,6 @@ def download_summary(request, session_id):
         ]
     }
     
-    import pandas as pd
     df = pd.DataFrame(data)
     return ExcelExporter._create_excel_response(df, f'summary_session_{session_id}.xlsx')
 
