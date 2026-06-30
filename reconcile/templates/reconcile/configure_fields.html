@@ -23,7 +23,7 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-10">
+    <div class="col-md-12">
         <div class="card">
             <div class="card-header bg-primary text-white">
                 <h4 class="mb-0"><i class="fas fa-cogs"></i> Configure Reconciliation Fields</h4>
@@ -32,11 +32,19 @@
                 <form method="POST" id="configForm">
                     {% csrf_token %}
                     
-                    <div class="mb-3">
-                        <label class="form-label">Configuration Name</label>
-                        <input type="text" name="config_name" class="form-control" 
-                               value="{% if config %}{{ config.name }}{% endif %}" 
-                               placeholder="e.g., Monthly Reconciliation Jan 2024">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Configuration Name</label>
+                            <input type="text" name="config_name" class="form-control" 
+                                   value="{% if config %}{{ config.name }}{% endif %}" 
+                                   placeholder="e.g., Monthly Reconciliation Jan 2024" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Description</label>
+                            <input type="text" name="description" class="form-control" 
+                                   value="{% if config %}{{ config.description }}{% endif %}" 
+                                   placeholder="e.g., PPN vs Pembukuan">
+                        </div>
                     </div>
 
                     <div class="alert alert-info">
@@ -49,22 +57,9 @@
                         <div class="field-row">
                             <div class="row">
                                 <div class="col-md-2">
-                                    <label class="form-label">Field Code</label>
-                                    <select name="field_code[]" class="form-select field-code" required>
-                                        {% for code, label in field_options %}
-                                            <option value="{{ code }}">{{ code }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="col-md-3">
                                     <label class="form-label">Field Name</label>
                                     <input type="text" name="field_name[]" class="form-control" 
                                            placeholder="e.g., Nomor Jurnal" required>
-                                </div>
-                                <div class="col-md-3">
-                                    <label class="form-label">Display Name</label>
-                                    <input type="text" name="display_name[]" class="form-control" 
-                                           placeholder="e.g., Journal Number" required>
                                 </div>
                                 <div class="col-md-2">
                                     <label class="form-label">Data Type</label>
@@ -74,10 +69,20 @@
                                         {% endfor %}
                                     </select>
                                 </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Excel Column (File A)</label>
+                                    <input type="text" name="excel_column_a[]" class="form-control" 
+                                           placeholder="e.g., Column1" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">Excel Column (File B)</label>
+                                    <input type="text" name="excel_column_b[]" class="form-control" 
+                                           placeholder="e.g., Column1" required>
+                                </div>
                                 <div class="col-md-2">
                                     <label class="form-label">Matching</label>
                                     <div class="form-check mt-2">
-                                        <input type="checkbox" name="is_matching[]" value="A" class="form-check-input matching-check">
+                                        <input type="checkbox" name="is_matching[]" value="{{ forloop.counter0 }}" class="form-check-input matching-check">
                                         <label class="form-check-label">Use for matching</label>
                                     </div>
                                 </div>
@@ -117,7 +122,6 @@
     $(document).ready(function() {
         let fieldCount = 1;
         const maxFields = 12;
-        const fieldCodes = 'ABCDEFGHIJKL'.split('');
 
         $('#addFieldBtn').click(function() {
             if (fieldCount >= maxFields) {
@@ -126,40 +130,13 @@
             }
 
             const newRow = $('.field-row:first').clone();
-            const fieldIndex = fieldCount;
-            
-            // Update field code
-            const codeSelect = newRow.find('.field-code');
-            const availableCodes = fieldCodes.slice(0, maxFields);
-            const usedCodes = [];
-            $('.field-code').each(function() {
-                usedCodes.push($(this).val());
-            });
-            
-            codeSelect.empty();
-            availableCodes.forEach(function(code) {
-                if (!usedCodes.includes(code)) {
-                    codeSelect.append(`<option value="${code}">${code}</option>`);
-                }
-            });
             
             // Clear values
             newRow.find('input[type="text"]').val('');
-            newRow.find('.matching-check').prop('checked', false).val(codeSelect.val());
+            newRow.find('.matching-check').prop('checked', false).val(fieldCount);
             
             // Update matching checkbox value
-            newRow.find('.matching-check').val(codeSelect.val());
-            
-            // Update checkbox label
-            newRow.find('.matching-check').change(function() {
-                $(this).val($(this).prop('checked') ? $(this).closest('.field-row').find('.field-code').val() : '');
-            });
-            
-            // Update field code on change
-            newRow.find('.field-code').change(function() {
-                const val = $(this).val();
-                $(this).closest('.field-row').find('.matching-check').val(val);
-            });
+            newRow.find('.matching-check').val(fieldCount);
             
             $('#fieldsContainer').append(newRow);
             fieldCount++;

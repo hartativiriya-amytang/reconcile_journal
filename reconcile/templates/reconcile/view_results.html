@@ -37,15 +37,15 @@
         margin-bottom: 10px;
         border-radius: 4px;
     }
-    .result-row.match {
+    .result-row.MATCH {
         border-left-color: #28a745;
         background: #f0fff4;
     }
-    .result-row.only-a {
+    .result-row.ONLY_A {
         border-left-color: #ffc107;
         background: #fffcf0;
     }
-    .result-row.only-b {
+    .result-row.ONLY_B {
         border-left-color: #dc3545;
         background: #fff0f0;
     }
@@ -130,17 +130,17 @@
                                     <td>{{ forloop.counter }}</td>
                                     <td>
                                         <span class="badge 
-                                            {% if result.status == 'match' %}bg-success
-                                            {% elif result.status == 'only_a' %}bg-warning
+                                            {% if result.status == 'MATCH' %}bg-success
+                                            {% elif result.status == 'ONLY_A' %}bg-warning
                                             {% else %}bg-danger{% endif %}">
                                             {{ result.get_status_display }}
                                         </span>
                                     </td>
                                     {% for field in field_names %}
                                         <td>
-                                            {% if result.status == 'match' %}
+                                            {% if result.status == 'MATCH' %}
                                                 {{ result.file_a_data|get_item:field }}
-                                            {% elif result.status == 'only_a' %}
+                                            {% elif result.status == 'ONLY_A' %}
                                                 {{ result.file_a_data|get_item:field }}
                                             {% else %}
                                                 {{ result.file_b_data|get_item:field }}

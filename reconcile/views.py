@@ -9,7 +9,10 @@ import pandas as pd
 import json
 import os
 
-from .models import ReconciliationConfig, ReconciliationField, ReconciliationSession, ReconciliationResult
+from .models import (
+    ReconciliationConfig, ReconciliationField, FieldMapping, 
+    ReconciliationRule, ReconciliationSession, ReconciliationResult
+)
 from .services.reconciliation import ReconciliationService
 from .services.export_excel import ExcelExporter
 from .services.excel_parser import ExcelParser
@@ -18,7 +21,7 @@ from .services.excel_parser import ExcelParser
 def index(request):
     """Home page with list of reconciliation sessions"""
     try:
-        sessions = ReconciliationSession.objects.all()[:20]
+        sessions = ReconciliationSession.objects.all().order_by('-created_at')[:20]
         return render(request, 'reconcile/index.html', {'sessions': sessions})
     except Exception as e:
         messages.error(request, f'Error loading sessions: {str(e)}')
@@ -28,6 +31,7 @@ def index(request):
 def configure_fields(request):
     """Configure reconciliation fields and matching criteria"""
     config = None
+    
     if request.method == 'POST':
         try:
             # Get or create config
@@ -36,24 +40,26 @@ def configure_fields(request):
                 config = get_object_or_404(ReconciliationConfig, id=config_id)
             else:
                 config = ReconciliationConfig.objects.create(
-                    name=request.POST.get('config_name', f"Config_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+                    name=request.POST.get('config_name', f"Config_{datetime.now().strftime('%Y%m%d_%H%M%S')}"),
+                    description=request.POST.get('description', '')
                 )
             
-            # Clear existing fields
+            # Clear existing data
             config.fields.all().delete()
+            config.mappings.all().delete()
+            config.rules.all().delete()
             
             # Process fields
-            field_codes = request.POST.getlist('field_code[]')
             field_names = request.POST.getlist('field_name[]')
-            display_names = request.POST.getlist('display_name[]')
             data_types = request.POST.getlist('data_type[]')
-            is_matching = request.POST.getlist('is_matching[]')
+            sequences = request.POST.getlist('sequence[]')
             
-            if len(field_codes) > 12:
+            # Validate
+            if len(field_names) > 12:
                 messages.error(request, 'Maximum 12 fields allowed')
                 return redirect('configure_fields')
             
-            if len(field_codes) < 1:
+            if len(field_names) < 1:
                 messages.error(request, 'Minimum 1 field required')
                 return redirect('configure_fields')
             
@@ -62,41 +68,99 @@ def configure_fields(request):
                 messages.error(request, 'Duplicate field names are not allowed')
                 return redirect('configure_fields')
             
-            # Create fields
+            # Create fields and mappings
+            field_objects = []
+            excel_columns_a = request.POST.getlist('excel_column_a[]')
+            excel_columns_b = request.POST.getlist('excel_column_b[]')
+            is_matching = request.POST.getlist('is_matching[]')
+            
             matching_fields = []
-            for i, field_code in enumerate(field_codes):
-                if field_code:  # Skip empty
-                    is_match = field_code in is_matching
-                    field = ReconciliationField.objects.create(
+            
+            for i, field_name in enumerate(field_names):
+                if not field_name:  # Skip empty
+                    continue
+                    
+                # Create field
+                field = ReconciliationField.objects.create(
+                    config=config,
+                    field_name=field_name,
+                    data_type=data_types[i] if i < len(data_types) else 'string',
+                    sequence=i + 1
+                )
+                field_objects.append(field)
+                
+                # Create mapping for File A
+                if i < len(excel_columns_a) and excel_columns_a[i]:
+                    mapping_a = FieldMapping.objects.create(
                         config=config,
-                        field_code=field_code,
-                        field_name=field_names[i],
-                        display_name=display_names[i],
-                        data_type=data_types[i] if i < len(data_types) else 'string',
-                        is_matching_criteria=is_match,
-                        order=i
+                        field=field,
+                        file_type='A',
+                        excel_column=excel_columns_a[i]
                     )
-                    if is_match:
-                        matching_fields.append(field.field_name)
+                
+                # Create mapping for File B
+                if i < len(excel_columns_b) and excel_columns_b[i]:
+                    mapping_b = FieldMapping.objects.create(
+                        config=config,
+                        field=field,
+                        file_type='B',
+                        excel_column=excel_columns_b[i]
+                    )
+                
+                # Check if this field is a matching criteria
+                if str(i) in is_matching or field_name in is_matching:
+                    matching_fields.append(field_name)
             
-            # Store matching fields in session for later use
-            request.session['matching_fields'] = matching_fields
+            # Create matching rules
+            if matching_fields:
+                # For each matching field, create a rule
+                for field_name in matching_fields:
+                    # Find the field object
+                    field = ReconciliationField.objects.filter(
+                        config=config, 
+                        field_name=field_name
+                    ).first()
+                    
+                    if field:
+                        # Get mappings for this field
+                        mapping_a = FieldMapping.objects.filter(
+                            config=config,
+                            field=field,
+                            file_type='A'
+                        ).first()
+                        
+                        mapping_b = FieldMapping.objects.filter(
+                            config=config,
+                            field=field,
+                            file_type='B'
+                        ).first()
+                        
+                        if mapping_a and mapping_b:
+                            ReconciliationRule.objects.create(
+                                config=config,
+                                left_field=mapping_a,
+                                right_field=mapping_b,
+                                operator='=',
+                                sequence=len(matching_fields) + 1
+                            )
+            
+            # Store in session
             request.session['config_id'] = config.id
+            request.session['matching_fields'] = matching_fields
             
-            messages.success(request, 'Configuration saved successfully')
+            messages.success(request, 'Configuration saved successfully!')
             return redirect('upload_files')
             
         except Exception as e:
             messages.error(request, f'Error saving configuration: {str(e)}')
             return redirect('configure_fields')
     
-    # GET request - show configuration form
-    field_options = [(chr(65+i), f"Field {chr(65+i)}") for i in range(12)]  # A to L
+    # GET request
+    field_options = [(chr(65+i), f"Field {chr(65+i)}") for i in range(12)]
     data_type_options = [
         ('string', 'String'),
         ('number', 'Number'),
         ('date', 'Date'),
-        ('datetime', 'DateTime'),
     ]
     
     return render(request, 'reconcile/configure_fields.html', {
@@ -139,34 +203,43 @@ def upload_files(request):
                 return redirect('upload_files')
             
             # Save uploaded files
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             file_a_path = default_storage.save(
-                f'reconcile/file_a_{datetime.now().strftime("%Y%m%d_%H%M%S")}_{file_a.name}',
+                f'reconcile/file_a_{timestamp}_{file_a.name}',
                 ContentFile(file_a.read())
             )
             file_b_path = default_storage.save(
-                f'reconcile/file_b_{datetime.now().strftime("%Y%m%d_%H%M%S")}_{file_b.name}',
+                f'reconcile/file_b_{timestamp}_{file_b.name}',
                 ContentFile(file_b.read())
             )
             
             # Create session
             session = ReconciliationSession.objects.create(
                 config=config,
-                file_a_name=file_a.name,
-                file_b_name=file_b.name,
-                file_a_path=file_a_path,
-                file_b_path=file_b_path,
+                file_a=file_a_path,
+                file_b=file_b_path,
                 status='processing'
             )
             
-            # Get field mapping
+            # Get field mappings
+            mappings_a = FieldMapping.objects.filter(config=config, file_type='A')
+            mappings_b = FieldMapping.objects.filter(config=config, file_type='B')
+            
+            # Build mapping dictionaries
+            mapping_a_dict = {m.excel_column: m.field.field_name for m in mappings_a}
+            mapping_b_dict = {m.excel_column: m.field.field_name for m in mappings_b}
+            
+            # Get all field names
             fields = config.fields.all()
-            field_mapping = {field.field_name: field.field_name for field in fields}
+            all_field_names = [f.field_name for f in fields]
             
             # Process reconciliation
             service = ReconciliationService(
                 config_id=config.id,
                 matching_fields=matching_fields,
-                field_mapping=field_mapping
+                field_mapping_a=mapping_a_dict,
+                field_mapping_b=mapping_b_dict,
+                all_fields=all_field_names
             )
             
             # Re-read files for processing
@@ -185,19 +258,18 @@ def upload_files(request):
             
             if results.get('status') == 'failed':
                 session.status = 'failed'
-                session.error_message = results.get('error_message')
                 session.save()
                 messages.error(request, f'Reconciliation failed: {results.get("error_message")}')
                 return redirect('upload_files')
             
             # Update session with results
             session.status = 'completed'
-            session.total_records_a = results.get('total_records_a', 0)
-            session.total_records_b = results.get('total_records_b', 0)
-            session.matched_count = results.get('matched_count', 0)
-            session.only_a_count = results.get('only_a_count', 0)
-            session.only_b_count = results.get('only_b_count', 0)
-            session.completed_at = datetime.now()
+            session.total_a = results.get('total_records_a', 0)
+            session.total_b = results.get('total_records_b', 0)
+            session.matched = results.get('matched_count', 0)
+            session.only_a = results.get('only_a_count', 0)
+            session.only_b = results.get('only_b_count', 0)
+            session.finished_at = datetime.now()
             session.save()
             
             # Save detailed results
@@ -215,10 +287,12 @@ def upload_files(request):
     
     # GET request
     fields = config.fields.all()
+    mappings = FieldMapping.objects.filter(config=config)
     
     return render(request, 'reconcile/upload_files.html', {
         'config': config,
         'fields': fields,
+        'mappings': mappings,
         'matching_fields': matching_fields
     })
 
@@ -228,30 +302,25 @@ def view_results(request, session_id):
     session = get_object_or_404(ReconciliationSession, id=session_id)
     results = session.results.all()
     
-    # Get distinct field names from results
-    field_names = []
-    if results.exists():
-        first_result = results.first()
-        if first_result.file_a_data:
-            field_names = list(first_result.file_a_data.keys())
-        elif first_result.file_b_data:
-            field_names = list(first_result.file_b_data.keys())
+    # Get field names from config
+    fields = session.config.fields.all()
+    field_names = [f.field_name for f in fields]
     
     # Calculate match rate
     match_rate = 0
-    if session.total_records_a > 0:
-        match_rate = (session.matched_count / session.total_records_a) * 100
+    if session.total_a > 0:
+        match_rate = (session.matched / session.total_a) * 100
     
     return render(request, 'reconcile/view_results.html', {
         'session': session,
         'results': results,
         'field_names': field_names,
         'stats': {
-            'total_records_a': session.total_records_a,
-            'total_records_b': session.total_records_b,
-            'matched': session.matched_count,
-            'only_a': session.only_a_count,
-            'only_b': session.only_b_count,
+            'total_records_a': session.total_a,
+            'total_records_b': session.total_b,
+            'matched': session.matched,
+            'only_a': session.only_a,
+            'only_b': session.only_b,
             'match_rate': match_rate
         }
     })
@@ -260,18 +329,15 @@ def view_results(request, session_id):
 def download_matched(request, session_id):
     """Download matched data as Excel"""
     session = get_object_or_404(ReconciliationSession, id=session_id)
-    results = session.results.filter(status='match')
+    results = session.results.filter(status='MATCH')
     
     if not results.exists():
         messages.error(request, 'No matched data found')
         return redirect('view_results', session_id=session_id)
     
-    # Get field names from results
-    fields = []
-    for result in results:
-        if result.file_a_data:
-            fields = list(result.file_a_data.keys())
-            break
+    # Get field names
+    fields = session.config.fields.all()
+    field_names = [f.field_name for f in fields]
     
     # Convert to list of dicts
     data = []
@@ -279,7 +345,7 @@ def download_matched(request, session_id):
         row = {
             'Status': 'MATCH',
         }
-        for field in fields:
+        for field in field_names:
             row[f'File_A_{field}'] = result.file_a_data.get(field, '')
             row[f'File_B_{field}'] = result.file_b_data.get(field, '')
         data.append(row)
@@ -292,19 +358,16 @@ def download_matched(request, session_id):
 def download_unmatched(request, session_id):
     """Download unmatched data as Excel"""
     session = get_object_or_404(ReconciliationSession, id=session_id)
-    only_a_results = session.results.filter(status='only_a')
-    only_b_results = session.results.filter(status='only_b')
+    only_a_results = session.results.filter(status='ONLY_A')
+    only_b_results = session.results.filter(status='ONLY_B')
     
     if not only_a_results.exists() and not only_b_results.exists():
         messages.error(request, 'No unmatched data found')
         return redirect('view_results', session_id=session_id)
     
     # Get field names
-    fields = []
-    if only_a_results.exists():
-        fields = list(only_a_results.first().file_a_data.keys())
-    elif only_b_results.exists():
-        fields = list(only_b_results.first().file_b_data.keys())
+    fields = session.config.fields.all()
+    field_names = [f.field_name for f in fields]
     
     # Prepare data
     data_a = []
@@ -312,7 +375,7 @@ def download_unmatched(request, session_id):
         row = {
             'Status': 'ONLY_FILE_A',
         }
-        for field in fields:
+        for field in field_names:
             row[field] = result.file_a_data.get(field, '')
         data_a.append(row)
     
@@ -321,7 +384,7 @@ def download_unmatched(request, session_id):
         row = {
             'Status': 'ONLY_FILE_B',
         }
-        for field in fields:
+        for field in field_names:
             row[field] = result.file_b_data.get(field, '')
         data_b.append(row)
     
@@ -376,15 +439,15 @@ def download_summary(request, session_id):
         'Value': [
             session.id,
             session.config.name,
-            session.file_a_name,
-            session.file_b_name,
-            session.total_records_a,
-            session.total_records_b,
-            session.matched_count,
-            session.only_a_count,
-            session.only_b_count,
-            f"{(session.matched_count / max(session.total_records_a, 1) * 100):.2f}%",
-            session.completed_at.strftime('%Y-%m-%d %H:%M:%S') if session.completed_at else 'N/A',
+            session.file_a.name if session.file_a else 'N/A',
+            session.file_b.name if session.file_b else 'N/A',
+            session.total_a,
+            session.total_b,
+            session.matched,
+            session.only_a,
+            session.only_b,
+            f"{(session.matched / max(session.total_a, 1) * 100):.2f}%",
+            session.finished_at.strftime('%Y-%m-%d %H:%M:%S') if session.finished_at else 'N/A',
             session.get_status_display()
         ]
     }

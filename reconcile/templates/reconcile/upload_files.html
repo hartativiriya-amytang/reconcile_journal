@@ -18,10 +18,14 @@
                             <td>{{ config.name }}</td>
                         </tr>
                         <tr>
+                            <td><strong>Description:</strong></td>
+                            <td>{{ config.description|default:"-" }}</td>
+                        </tr>
+                        <tr>
                             <td><strong>Fields:</strong></td>
                             <td>
                                 {% for field in fields %}
-                                    <span class="badge bg-secondary">{{ field.field_code }}</span>
+                                    <span class="badge bg-secondary">{{ field.field_name }}</span>
                                 {% endfor %}
                             </td>
                         </tr>
@@ -29,8 +33,28 @@
                             <td><strong>Matching Fields:</strong></td>
                             <td>
                                 {% for field in fields %}
-                                    {% if field.is_matching_criteria %}
+                                    {% if field.field_name in matching_fields %}
                                         <span class="badge bg-primary">{{ field.field_name }}</span>
+                                    {% endif %}
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>File A Mapping:</strong></td>
+                            <td>
+                                {% for mapping in mappings %}
+                                    {% if mapping.file_type == 'A' %}
+                                        <span class="badge bg-info">{{ mapping.excel_column }} → {{ mapping.field.field_name }}</span>
+                                    {% endif %}
+                                {% endfor %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <td><strong>File B Mapping:</strong></td>
+                            <td>
+                                {% for mapping in mappings %}
+                                    {% if mapping.file_type == 'B' %}
+                                        <span class="badge bg-info">{{ mapping.excel_column }} → {{ mapping.field.field_name }}</span>
                                     {% endif %}
                                 {% endfor %}
                             </td>
@@ -60,10 +84,16 @@
 
                     <div class="alert alert-warning">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <strong>Important:</strong> Ensure your Excel files have column headers that match the configured field names.
+                        <strong>Important:</strong> Ensure your Excel files have column headers that match the configured mappings.
                         <ul class="mt-2 mb-0">
-                            {% for field in fields %}
-                                <li><strong>{{ field.field_code }}</strong> = {{ field.field_name }}</li>
+                            {% for mapping in mappings %}
+                                <li>
+                                    <strong>File {{ mapping.file_type }}:</strong> 
+                                    Column "{{ mapping.excel_column }}" → {{ mapping.field.field_name }}
+                                    {% if mapping.field.field_name in matching_fields %}
+                                        <span class="badge bg-primary">Matching</span>
+                                    {% endif %}
+                                </li>
                             {% endfor %}
                         </ul>
                     </div>

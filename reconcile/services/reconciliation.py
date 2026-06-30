@@ -9,18 +9,24 @@ import json
 class ReconciliationService:
     """Main reconciliation service"""
     
-    def __init__(self, config_id: int, matching_fields: List[str], field_mapping: Dict[str, str]):
+    def __init__(self, config_id: int, matching_fields: List[str], 
+                 field_mapping_a: Dict[str, str], field_mapping_b: Dict[str, str],
+                 all_fields: List[str]):
         """
         Initialize reconciliation service
         
         Args:
             config_id: Configuration ID
             matching_fields: List of field names to use for matching
-            field_mapping: Mapping of Excel columns to system fields
+            field_mapping_a: Mapping of Excel columns to system fields for File A
+            field_mapping_b: Mapping of Excel columns to system fields for File B
+            all_fields: List of all field names
         """
         self.config_id = config_id
         self.matching_fields = matching_fields
-        self.field_mapping = field_mapping
+        self.field_mapping_a = field_mapping_a
+        self.field_mapping_b = field_mapping_b
+        self.all_fields = all_fields
         self.parser = ExcelParser()
         self.rule_engine = RuleEngine(matching_fields)
         
@@ -39,9 +45,9 @@ class ReconciliationService:
             df_a = self.parser.read_excel_file(file_a)
             df_b = self.parser.read_excel_file(file_b)
             
-            # Map columns
-            mapped_df_a = self.parser.map_columns(df_a, self.field_mapping)
-            mapped_df_b = self.parser.map_columns(df_b, self.field_mapping)
+            # Map columns for each file
+            mapped_df_a = self.parser.map_columns(df_a, self.field_mapping_a)
+            mapped_df_b = self.parser.map_columns(df_b, self.field_mapping_b)
             
             # Clean data: remove rows with empty matching fields
             for field in self.matching_fields:
@@ -87,7 +93,7 @@ class ReconciliationService:
         for item in results.get('matched_data', []):
             ReconciliationResult.objects.create(
                 session_id=session_id,
-                status='match',
+                status='MATCH',
                 file_a_data=item.get('file_a_data', {}),
                 file_b_data=item.get('file_b_data', {}),
                 match_key=self.rule_engine.generate_match_key(item.get('file_a_data', {}))
@@ -97,7 +103,7 @@ class ReconciliationService:
         for item in results.get('only_a_data', []):
             ReconciliationResult.objects.create(
                 session_id=session_id,
-                status='only_a',
+                status='ONLY_A',
                 file_a_data=item.get('file_a_data', {}),
                 file_b_data={},
                 match_key=self.rule_engine.generate_match_key(item.get('file_a_data', {}))
@@ -107,7 +113,7 @@ class ReconciliationService:
         for item in results.get('only_b_data', []):
             ReconciliationResult.objects.create(
                 session_id=session_id,
-                status='only_b',
+                status='ONLY_B',
                 file_a_data={},
                 file_b_data=item.get('file_b_data', {}),
                 match_key=self.rule_engine.generate_match_key(item.get('file_b_data', {}))
