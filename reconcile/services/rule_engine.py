@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Tuple
 import hashlib
 import json
+import pandas as pd
 
 
 class RuleEngine:
@@ -60,8 +61,6 @@ class RuleEngine:
         Returns:
             Tuple of (matched, only_a, only_b)
         """
-        import pandas as pd
-        
         matched = []
         only_a = []
         only_b = []

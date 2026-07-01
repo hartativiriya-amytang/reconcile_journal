@@ -52,7 +52,9 @@ def configure_fields(request):
             # Process fields
             field_names = request.POST.getlist('field_name[]')
             data_types = request.POST.getlist('data_type[]')
-            sequences = request.POST.getlist('sequence[]')
+            excel_columns_a = request.POST.getlist('excel_column_a[]')
+            excel_columns_b = request.POST.getlist('excel_column_b[]')
+            is_matching = request.POST.getlist('is_matching[]')
             
             # Validate
             if len(field_names) > 12:
@@ -70,10 +72,6 @@ def configure_fields(request):
             
             # Create fields and mappings
             field_objects = []
-            excel_columns_a = request.POST.getlist('excel_column_a[]')
-            excel_columns_b = request.POST.getlist('excel_column_b[]')
-            is_matching = request.POST.getlist('is_matching[]')
-            
             matching_fields = []
             
             for i, field_name in enumerate(field_names):
@@ -108,21 +106,18 @@ def configure_fields(request):
                     )
                 
                 # Check if this field is a matching criteria
-                if str(i) in is_matching or field_name in is_matching:
+                if str(i) in is_matching:
                     matching_fields.append(field_name)
             
             # Create matching rules
             if matching_fields:
-                # For each matching field, create a rule
                 for field_name in matching_fields:
-                    # Find the field object
                     field = ReconciliationField.objects.filter(
                         config=config, 
                         field_name=field_name
                     ).first()
                     
                     if field:
-                        # Get mappings for this field
                         mapping_a = FieldMapping.objects.filter(
                             config=config,
                             field=field,
@@ -156,7 +151,6 @@ def configure_fields(request):
             return redirect('configure_fields')
     
     # GET request
-    field_options = [(chr(65+i), f"Field {chr(65+i)}") for i in range(12)]
     data_type_options = [
         ('string', 'String'),
         ('number', 'Number'),
@@ -164,7 +158,6 @@ def configure_fields(request):
     ]
     
     return render(request, 'reconcile/configure_fields.html', {
-        'field_options': field_options,
         'data_type_options': data_type_options,
         'config': config
     })
@@ -216,8 +209,10 @@ def upload_files(request):
             # Create session
             session = ReconciliationSession.objects.create(
                 config=config,
-                file_a=file_a_path,
-                file_b=file_b_path,
+                file_a_path=file_a_path,
+                file_b_path=file_b_path,
+                file_a_name=file_a.name,
+                file_b_name=file_b.name,
                 status='processing'
             )
             
@@ -258,6 +253,7 @@ def upload_files(request):
             
             if results.get('status') == 'failed':
                 session.status = 'failed'
+                session.error_message = results.get('error_message')
                 session.save()
                 messages.error(request, f'Reconciliation failed: {results.get("error_message")}')
                 return redirect('upload_files')
@@ -439,8 +435,8 @@ def download_summary(request, session_id):
         'Value': [
             session.id,
             session.config.name,
-            session.file_a.name if session.file_a else 'N/A',
-            session.file_b.name if session.file_b else 'N/A',
+            session.file_a_name if session.file_a_name else 'N/A',
+            session.file_b_name if session.file_b_name else 'N/A',
             session.total_a,
             session.total_b,
             session.matched,

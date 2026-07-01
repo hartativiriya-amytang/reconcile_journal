@@ -134,9 +134,7 @@ class ReconciliationRule(models.Model):
 
 
 class ReconciliationSession(models.Model):
-
     STATUS = [
-
         ("pending", "Pending"),
         ("processing", "Processing"),
         ("completed", "Completed"),
@@ -148,8 +146,10 @@ class ReconciliationSession(models.Model):
         on_delete=models.CASCADE
     )
 
-    file_a = models.FileField(upload_to="uploads/")
-    file_b = models.FileField(upload_to="uploads/")
+    file_a_path = models.CharField(max_length=500)  # Changed from file_a
+    file_b_path = models.CharField(max_length=500)  # Changed from file_b
+    file_a_name = models.CharField(max_length=255, blank=True)  # Added for display
+    file_b_name = models.CharField(max_length=255, blank=True)  # Added for display
 
     status = models.CharField(
         max_length=20,
@@ -166,6 +166,11 @@ class ReconciliationSession(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     finished_at = models.DateTimeField(null=True, blank=True)
+    
+    error_message = models.TextField(blank=True, null=True)  # Added for error handling
+
+    def __str__(self):
+        return f"Session {self.id} - {self.config.name}"
 
 
 class ReconciliationResult(models.Model):

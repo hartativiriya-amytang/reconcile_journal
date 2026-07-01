@@ -2,15 +2,19 @@
 
 ## Overview
 
-`recon_system` is a Django-based reconciliation application built to compare two Excel datasets and highlight matched versus unmatched records. It supports configurable reconciliation fields, matching rules, session persistence, and Excel export of results.
+`recon_system` is a Django-based reconciliation system built to compare two Excel datasets and highlight matched versus unmatched records. It features a **full REST API** (built with Django REST Framework) and a **Jazzmin-powered ERP-style admin interface** with a dark theme.
 
 ## Features
 
-- Configure reconciliation fields and matching criteria.
-- Upload and parse Excel files (`.xlsx`, `.xls`).
-- Match records from File A and File B using configurable keys.
-- Store reconciliation sessions and detailed results.
-- Export matched, unmatched, and summary reports as Excel files.
+- **REST API** — Full CRUD for all models via DRF ViewSets with filtering, search, and pagination.
+- **ERP Admin Interface** — Jazzmin-themed Django admin (dark theme) with custom dashboard, stat cards, icons, and quick actions.
+- **Custom Web UI** — Step-by-step reconciliation wizard that embeds within the Jazzmin admin layout (configure fields → upload files → view results).
+- **API Documentation** — Auto-generated Swagger UI at `/api/docs/`.
+- **Bulk Configuration** — Create configs, fields, mappings, and rules in one API call.
+- **File Reconciliation** — Upload two Excel files and run matching via API or admin.
+- **Export** — Download matched, unmatched, and summary reports as Excel files.
+- **Admin Dashboard** — Custom Jazzmin admin home with stat counters, recent sessions table, and quick action links.
+- **Error Handling** — Failed reconciliation sessions capture and display error messages.
 
 ## Project Structure
 
@@ -18,38 +22,43 @@
 recon_system
 ├─ db.sqlite3
 ├─ manage.py
+├─ requirements.txt
 ├─ README.md
-├─ reconcile
-│  ├─ admin.py
+├─ reconcile/
+│  ├─ admin.py                 # Jazzmin-enhanced admin with badges, inline editing, action buttons
+│  ├─ api_views.py             # DRF ViewSets + custom reconcile/download endpoints
+│  ├─ api_urls.py              # API route definitions (DRF router)
 │  ├─ apps.py
-│  ├─ migrations
-│  │  ├─ 0001_initial.py
-│  │  └─ __init__.py
-│  ├─ models.py
-│  ├─ services
+│  ├─ context_processors.py    # Dashboard stats context for Jazzmin admin
+│  ├─ migrations/
+│  ├─ models.py                 # 6 models: Config, Field, Mapping, Rule, Session, Result
+│  ├─ serializers.py           # DRF serializers (+ BulkConfigSerializer, ReconcileSerializer)
+│  ├─ services/
 │  │  ├─ excel_parser.py
 │  │  ├─ export_excel.py
 │  │  ├─ reconciliation.py
-│  │  ├─ rule_engine.py
-│  ├─ templates
-│  │  └─ reconcile
-│  │     ├─ base.html
+│  │  └─ rule_engine.py
+│  ├─ templates/
+│  │  ├─ admin/
+│  │  │  └─ index.html         # Custom Jazzmin dashboard (stats, recent sessions, quick actions)
+│  │  └─ reconcile/
+│  │     ├─ base.html           # Extends jazzmin/admin/base.html
 │  │     ├─ configure_fields.html
 │  │     ├─ index.html
-│  │     ├─ uploads_file.html
+│  │     ├─ upload_files.html
 │  │     └─ view_results.html
-│  ├─ templatetags
+│  ├─ templatetags/
 │  │  └─ dict_filters.py
 │  ├─ tests.py
-│  ├─ urls.py
-│  ├─ utils
+│  ├─ urls.py                   # Custom web UI routes
+│  ├─ utils/
 │  │  └─ dataframe.py
-│  ├─ views.py
+│  ├─ views.py                  # Custom web UI wizard views
 │  └─ __init__.py
-└─ recon_system
+└─ recon_system/
    ├─ asgi.py
-   ├─ settings.py
-   ├─ urls.py
+   ├─ settings.py               # Jazzmin, DRF, CORS, drf-spectacular config
+   ├─ urls.py                   # Root URLconf (admin, API, swagger, redirect to admin)
    ├─ wsgi.py
    └─ __init__.py
 ```
@@ -57,154 +66,137 @@ recon_system
 ## Requirements
 
 - Python 3.10+
-- Django 5.2
-- pandas
-- openpyxl
+- Django >=4.2
+- djangorestframework >=3.15
+- django-jazzmin >=3.0
+- django-cors-headers >=4.0
+- django-filter >=23.0
+- drf-spectacular >=0.27
+- pandas >=2.0
+- openpyxl >=3.1
 
 ## Installation
 
-1. Clone or open the repository.
-2. Create and activate a virtual environment.
-
 ```bash
-cd c:\Users\amyta\Documents\recon_system
+git clone <repo-url> recon_system
+cd recon_system
 python -m venv .venv
+
+# Windows
 .venv\Scripts\activate
-```
 
-3. Install dependencies.
+# macOS / Linux
+source .venv/bin/activate
 
-```bash
-pip install django pandas openpyxl
-```
-
-4. Apply database migrations.
-
-```bash
-python manage.py makemigrations
+pip install -r requirements.txt
 python manage.py migrate
 ```
 
 ## Running the App
 
-Start the Django development server:
-
 ```bash
 python manage.py runserver
 ```
 
-Open the application in a browser at:
+Open in browser:
 
-```text
-http://127.0.0.1:8000/
+| Page | URL |
+|---|---|
+| Admin Interface (default home) | http://127.0.0.1:8000/admin/ |
+| Custom Web UI | http://127.0.0.1:8000/reconcile/ |
+| API Docs (Swagger) | http://127.0.0.1:8000/api/docs/ |
+| API Root | http://127.0.0.1:8000/api/ |
+
+### Create Admin User (first time)
+
+```bash
+python manage.py createsuperuser
+# follow prompts to set username, email, and password
 ```
 
 ## Usage
 
-1. From the home screen, create a new reconciliation configuration.
-2. Define up to 12 fields and choose which fields are used for matching.
-3. Upload File A and File B as Excel workbooks.
-4. The system processes the files and generates a reconciliation session.
-5. View results and download matched, unmatched, and summary Excel exports.
+### Admin Interface (`/admin/`) — Default Home
+
+Full management with Jazzmin dark theme:
+
+- Custom dashboard with stat cards (configs, sessions, rules, results), recent sessions table, and quick action links.
+- Create and manage **Configurations** with inline fields, mappings, and rules.
+- Upload files via **Sessions** with status badges (Pending / Processing / Completed / Failed).
+- View match rate percentages with color coding (green ≥80%, orange ≥50%, red <50%).
+- Download matched, unmatched, and summary Excel exports directly from the session list.
+- Failed sessions display error messages in a collapsible fieldset.
+
+### Custom Web UI (`/reconcile/`)
+
+Step-by-step wizard (embedded in Jazzmin layout):
+
+1. **Configure Fields** — define field names, data types, Excel column mappings, and matching criteria (max 12 fields).
+2. **Upload Files** — upload two Excel files (.xlsx / .xls) with the mapped columns.
+3. **View Results** — see matched/unmatched records and download reports (matched, unmatched, summary).
+
+### REST API (`/api/`)
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/` | GET | API overview |
+| `/api/configs/` | GET/POST | List/create configurations |
+| `/api/configs/{id}/` | GET/PUT/PATCH/DELETE | CRUD configuration |
+| `/api/fields/` | GET/POST | List/create fields |
+| `/api/mappings/` | GET/POST | List/create mappings |
+| `/api/rules/` | GET/POST | List/create rules |
+| `/api/sessions/` | GET/POST | List/create sessions |
+| `/api/sessions/{id}/results/` | GET | Session results (filter by `?status=MATCH`) |
+| `/api/sessions/{id}/download_matched/` | GET | Download matched Excel |
+| `/api/sessions/{id}/download_unmatched/` | GET | Download unmatched Excel (multi-sheet) |
+| `/api/sessions/{id}/download_summary/` | GET | Download summary Excel |
+| `/api/results/` | GET/POST | List/create results |
+| `/api/bulk-configure/` | POST | Create config + fields + mappings + rules in one call |
+| `/api/reconcile/` | POST | Upload files and run reconciliation |
+| `/api/schema/` | GET | OpenAPI schema (JSON) |
+| `/api/docs/` | GET | Swagger UI documentation |
 
 ## App Components
 
 ### `reconcile` app
 
-This app contains the main reconciliation logic:
+- `models.py` — 6 models: `ReconciliationConfig`, `ReconciliationField`, `FieldMapping`, `ReconciliationRule`, `ReconciliationSession`, `ReconciliationResult`. Session stores file paths as `CharField` (not `FileField`) plus display names and optional error messages.
+- `serializers.py` — DRF serializers for all models, including `BulkConfigSerializer` and `ReconcileSerializer` for custom endpoints.
+- `api_views.py` — ViewSets with full CRUD, filtering, search, pagination, plus custom `reconcile`, `bulk-configure`, and `download_*` actions.
+- `api_urls.py` — API routing via DRF `DefaultRouter`.
+- `admin.py` — Jazzmin-enhanced admin with inline editing, status badges, match rate colors, action buttons (download links), collapsible error fieldsets, and custom list displays.
+- `context_processors.py` — Provides `dashboard_stats` context (config/session/rule/result counts, recent sessions) for the Jazzmin admin home.
+- `views.py` — Custom web UI wizard (configure → upload → results), now embedded within the Jazzmin admin layout.
+- `urls.py` — Custom web UI routes.
 
-- `models.py`
-  - `ReconciliationConfig`: stores reconciliation configurations.
-  - `ReconciliationField`: stores configured fields and matching criteria.
-  - `ReconciliationSession`: records each upload and reconciliation run.
-  - `ReconciliationResult`: stores individual matched and unmatched records.
+### Services
 
-- `views.py`
-  - `index`: displays recent reconciliation sessions.
-  - `configure_fields`: creates and saves reconciliation field configurations.
-  - `upload_files`: uploads Excel files, validates them, and runs reconciliation.
-  - `view_results`: displays reconciliation results and provides export actions.
-  - `download_matched`, `download_unmatched`, `download_summary`: export results as Excel files.
-  - `get_config_status`: simple JSON endpoint to verify config state.
+| Service | Description |
+|---|---|
+| `services/excel_parser.py` | Validate and read Excel files with pandas |
+| `services/reconciliation.py` | Orchestrate file parsing, matching, and result persistence |
+| `services/rule_engine.py` | Build match keys and compare records |
+| `services/export_excel.py` | Generate Excel export responses |
 
-- `urls.py`
-  - Defines app routing for web pages and download endpoints.
+### Utilities
 
-- `templates/reconcile`
-  - `base.html`: base layout for the UI.
-  - `index.html`: home page and session list.
-  - `configure_fields.html`: field configuration form.
-  - `uploads_file.html`: file upload page.
-  - `view_results.html`: reconciliation result dashboard.
-
-- `admin.py`
-  - Registers reconciliation models for Django admin management.
-
-### `reconcile/services/excel_parser.py`
-
-This service validates and reads Excel files using `pandas`:
-
-- `validate_excel_file()`: checks allowed Excel file extensions.
-- `read_excel_file()`: reads a sheet into a DataFrame, trims whitespace, and drops empty rows.
-- `get_sheet_names()`: exposes available workbook sheets.
-- `map_columns()`: maps incoming Excel columns to configured system fields.
-- `convert_data_types()`: converts fields to `number`, `date`, or `datetime` as configured.
-- `clean_headers()`: normalizes header values.
-
-### `reconcile/services/rule_engine.py`
-
-This engine computes matching keys and performs record matching:
-
-- `generate_match_key()`: builds a deterministic hash from configured matching fields.
-- `is_match()`: compares two records field-by-field with normalized string comparison.
-- `reconcile_data()`: matches records from File A and File B, returning matched, only-A, and only-B lists.
-
-### `reconcile/services/reconciliation.py`
-
-This is the orchestration service that ties parsing and rule evaluation together:
-
-- Validates both uploaded files.
-- Reads and maps file contents to configured fields.
-- Cleans input data and drops empty matching rows.
-- Converts mapped rows to JSON-serializable dictionaries.
-- Uses `RuleEngine` to compare data and categorize records.
-- Returns summary counts and matched/unmatched payloads.
-- Persists results to `ReconciliationResult` records for each session.
-
-### `reconcile/services/export_excel.py`
-
-Provides Excel export helpers for matched, unmatched, and summary reports.
-
-- `_create_excel_response()`: returns an `HttpResponse` with an Excel file.
-- `export_matched_data()`: exports matched rows from both files.
-- `export_unmatched_data()`: exports unmatched rows with separate sheets.
-- `export_summary()`: exports session summary metrics.
-
-### `reconcile/utils/dataframe.py`
-
-Utility functions for DataFrame cleanup and validation:
-
-- `clean_dataframe()`: trims whitespace, drops empty rows, and normalizes empty strings.
-- `validate_headers()`: checks if the DataFrame contains required column headers.
-- `get_missing_headers()`: returns header names that are not present.
-- `convert_to_serializable()`: converts a DataFrame to JSON-safe dictionary records.
-- `merge_dataframes()`: merges two DataFrames and annotates match status.
-- `get_match_summary()`: summarizes reconciliation results in a DataFrame.
+| Utility | Description |
+|---|---|
+| `utils/dataframe.py` | DataFrame cleanup, header validation, serialization, and merging |
 
 ## Notes
 
-- The current implementation assumes uploaded Excel column headers match the configured field names.
-- File uploads are stored temporarily via Django default storage.
+- Uploaded Excel column headers must match the configured field mappings.
+- File uploads are stored via Django default storage (paths stored as `CharField` in sessions).
 - Results are persisted in SQLite by default.
+- Maximum 12 fields per configuration, with at least 1 matching field required.
+- Failed sessions capture error messages for debugging.
+- The root URL (`/`) redirects to the admin interface.
 
 ## Suggested Improvements
 
-- Add a `requirements.txt` file for explicit dependencies.
-- Add unit tests for service modules and views.
-- Support custom field-to-column mapping for arbitrary Excel headers.
-- Add pagination for long result sets.
-- Add user authentication and multi-user session support.
-
-## Contact
-
-Inspect `reconcile/views.py`, `reconcile/services/`, and `reconcile/models.py` for the main implementation details.
+- Add unit tests for service modules, serializers, and API views.
+- Add Celery/background tasks for async file reconciliation.
+- Support custom sheet selection for multi-sheet Excel workbooks.
+- Add RBAC/permissions per config.
+- Dockerize the application.

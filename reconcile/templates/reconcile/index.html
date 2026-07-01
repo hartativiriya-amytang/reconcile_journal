@@ -2,7 +2,7 @@
 
 {% block title %}Home - Data Reconciliation{% endblock %}
 
-{% block content %}
+{% block main_content %}
 <div class="row">
     <div class="col-md-12">
         <div class="card">
@@ -46,9 +46,9 @@
                                         </td>
                                         <td>
                                             <small>
-                                                M: {{ session.matched_count }} | 
-                                                A: {{ session.only_a_count }} | 
-                                                B: {{ session.only_b_count }}
+                                                M: {{ session.matched }} | 
+                                                A: {{ session.only_a }} | 
+                                                B: {{ session.only_b }}
                                             </small>
                                         </td>
                                         <td>{{ session.created_at|date:"Y-m-d H:i" }}</td>

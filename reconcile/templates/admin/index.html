@@ -1,0 +1,118 @@
+{% extends "admin/index.html" %}
+{% load i18n static jazzmin %}
+
+{% block content_title %} {% trans 'Dashboard' %} {% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-info">
+            <div class="inner">
+                <h3>{{ dashboard_configs|default:"0" }}</h3>
+                <p>{% trans 'Configurations' %}</p>
+            </div>
+            <div class="icon"><i class="fas fa-cogs"></i></div>
+            <a href="{% url 'admin:reconcile_reconciliationconfig_changelist' %}" class="small-box-footer">
+                {% trans 'Manage Configs' %} <i class="fas fa-arrow-circle-right"></i>
+            </a>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-success">
+            <div class="inner">
+                <h3>{{ dashboard_sessions|default:"0" }}</h3>
+                <p>{% trans 'Sessions' %}</p>
+            </div>
+            <div class="icon"><i class="fas fa-tasks"></i></div>
+            <a href="{% url 'admin:reconcile_reconciliationsession_changelist' %}" class="small-box-footer">
+                {% trans 'View Sessions' %} <i class="fas fa-arrow-circle-right"></i>
+            </a>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-warning">
+            <div class="inner">
+                <h3>{{ dashboard_rules|default:"0" }}</h3>
+                <p>{% trans 'Rules' %}</p>
+            </div>
+            <div class="icon"><i class="fas fa-balance-scale"></i></div>
+            <a href="{% url 'admin:reconcile_reconciliationrule_changelist' %}" class="small-box-footer">
+                {% trans 'Manage Rules' %} <i class="fas fa-arrow-circle-right"></i>
+            </a>
+        </div>
+    </div>
+    <div class="col-lg-3 col-6">
+        <div class="small-box bg-danger">
+            <div class="inner">
+                <h3>{{ dashboard_results|default:"0" }}</h3>
+                <p>{% trans 'Results' %}</p>
+            </div>
+            <div class="icon"><i class="fas fa-clipboard-check"></i></div>
+            <a href="{% url 'admin:reconcile_reconciliationresult_changelist' %}" class="small-box-footer">
+                {% trans 'View Results' %} <i class="fas fa-arrow-circle-right"></i>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card card-primary card-outline">
+            <div class="card-header"><h3 class="card-title">{% trans 'Recent Sessions' %}</h3></div>
+            <div class="card-body p-0">
+                <table class="table table-striped">
+                    <thead><tr>
+                        <th>{% trans 'ID' %}</th>
+                        <th>{% trans 'Config' %}</th>
+                        <th>{% trans 'Status' %}</th>
+                        <th>{% trans 'Matched' %}</th>
+                        <th>{% trans 'Date' %}</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for session in dashboard_recent_sessions %}
+                    <tr>
+                        <td><a href="{% url 'admin:reconcile_reconciliationsession_change' session.id %}">#{{ session.id }}</a></td>
+                        <td>{{ session.config.name }}</td>
+                        <td>
+                            <span class="badge badge-{% if session.status == 'completed' %}success{% elif session.status == 'failed' %}danger{% else %}warning{% endif %}">
+                                {{ session.get_status_display }}
+                            </span>
+                        </td>
+                        <td>{{ session.matched }}/{{ session.total_a }}</td>
+                        <td>{{ session.created_at|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center">{% trans 'No sessions yet' %}</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-success card-outline">
+            <div class="card-header"><h3 class="card-title">{% trans 'Quick Actions' %}</h3></div>
+            <div class="card-body">
+                <div class="list-group">
+                    <a href="{% url 'admin:reconcile_reconciliationconfig_add' %}" class="list-group-item list-group-item-action">
+                        <i class="fas fa-plus-circle text-info mr-2"></i> {% trans 'New Configuration' %}
+                    </a>
+                    <a href="{% url 'admin:reconcile_reconciliationsession_add' %}" class="list-group-item list-group-item-action">
+                        <i class="fas fa-upload text-success mr-2"></i> {% trans 'Upload Files (Admin)' %}
+                    </a>
+                    <a href="/api/docs/" target="_blank" class="list-group-item list-group-item-action">
+                        <i class="fas fa-book text-primary mr-2"></i> {% trans 'API Documentation' %}
+                    </a>
+                    <a href="/api/" class="list-group-item list-group-item-action">
+                        <i class="fas fa-cloud text-warning mr-2"></i> {% trans 'API Overview' %}
+                    </a>
+                    <a href="{% url 'admin:reconcile_reconciliationresult_changelist' %}?status__exact=MATCH" class="list-group-item list-group-item-action">
+                        <i class="fas fa-check-circle text-success mr-2"></i> {% trans 'View Matched Results' %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{ block.super }}
+{% endblock %}
