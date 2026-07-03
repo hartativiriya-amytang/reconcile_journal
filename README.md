@@ -16,52 +16,6 @@
 - **Admin Dashboard** — Custom Jazzmin admin home with stat counters, recent sessions table, and quick action links.
 - **Error Handling** — Failed reconciliation sessions capture and display error messages.
 
-## Project Structure
-
-```
-recon_system
-├─ db.sqlite3
-├─ manage.py
-├─ requirements.txt
-├─ README.md
-├─ reconcile/
-│  ├─ admin.py                 # Jazzmin-enhanced admin with badges, inline editing, action buttons
-│  ├─ api_views.py             # DRF ViewSets + custom reconcile/download endpoints
-│  ├─ api_urls.py              # API route definitions (DRF router)
-│  ├─ apps.py
-│  ├─ context_processors.py    # Dashboard stats context for Jazzmin admin
-│  ├─ migrations/
-│  ├─ models.py                 # 6 models: Config, Field, Mapping, Rule, Session, Result
-│  ├─ serializers.py           # DRF serializers (+ BulkConfigSerializer, ReconcileSerializer)
-│  ├─ services/
-│  │  ├─ excel_parser.py
-│  │  ├─ export_excel.py
-│  │  ├─ reconciliation.py
-│  │  └─ rule_engine.py
-│  ├─ templates/
-│  │  ├─ admin/
-│  │  │  └─ index.html         # Custom Jazzmin dashboard (stats, recent sessions, quick actions)
-│  │  └─ reconcile/
-│  │     ├─ base.html           # Extends jazzmin/admin/base.html
-│  │     ├─ configure_fields.html
-│  │     ├─ index.html
-│  │     ├─ upload_files.html
-│  │     └─ view_results.html
-│  ├─ templatetags/
-│  │  └─ dict_filters.py
-│  ├─ tests.py
-│  ├─ urls.py                   # Custom web UI routes
-│  ├─ utils/
-│  │  └─ dataframe.py
-│  ├─ views.py                  # Custom web UI wizard views
-│  └─ __init__.py
-└─ recon_system/
-   ├─ asgi.py
-   ├─ settings.py               # Jazzmin, DRF, CORS, drf-spectacular config
-   ├─ urls.py                   # Root URLconf (admin, API, swagger, redirect to admin)
-   ├─ wsgi.py
-   └─ __init__.py
-```
 
 ## Requirements
 
@@ -74,6 +28,79 @@ recon_system
 - drf-spectacular >=0.27
 - pandas >=2.0
 - openpyxl >=3.1
+
+## Project Structure
+```
+recon_system
+├─ db.sqlite3
+├─ docs
+│  ├─ usage.md
+│  └─ user_roles.md
+├─ manage.py
+├─ README.md
+├─ reconcile
+│  ├─ admin.py
+│  ├─ api_urls.py
+│  ├─ api_views.py
+│  ├─ apps.py
+│  ├─ migrations
+│  │  ├─ 0001_initial.py
+│  │  ├─ 0002_fieldmapping_reconciliationrule_and_more.py
+│  │  ├─ __init__.py
+│  │  └─ __pycache__
+│  │     ├─ 0001_initial.cpython-310.pyc
+│  │     ├─ 0002_fieldmapping_reconciliationrule_and_more.cpython-310.pyc
+│  │     └─ __init__.cpython-310.pyc
+│  ├─ models.py
+│  ├─ serializers.py
+│  ├─ services
+│  │  ├─ excel_parser.py
+│  │  ├─ export_excel.py
+│  │  ├─ reconciliation.py
+│  │  ├─ rule_engine.py
+│  │  └─ __pycache__
+│  │     ├─ excel_parser.cpython-310.pyc
+│  │     ├─ export_excel.cpython-310.pyc
+│  │     ├─ reconciliation.cpython-310.pyc
+│  │     └─ rule_engine.cpython-310.pyc
+│  ├─ tests.py
+│  ├─ utils
+│  │  └─ dataframe.py
+│  ├─ __init__.py
+│  └─ __pycache__
+│     ├─ admin.cpython-310.pyc
+│     ├─ admin.cpython-314.pyc
+│     ├─ api_urls.cpython-310.pyc
+│     ├─ api_views.cpython-310.pyc
+│     ├─ apps.cpython-310.pyc
+│     ├─ apps.cpython-314.pyc
+│     ├─ context_processors.cpython-310.pyc
+│     ├─ models.cpython-310.pyc
+│     ├─ models.cpython-314.pyc
+│     ├─ serializers.cpython-310.pyc
+│     ├─ urls.cpython-310.pyc
+│     ├─ urls.cpython-314.pyc
+│     ├─ views.cpython-310.pyc
+│     ├─ views.cpython-314.pyc
+│     ├─ __init__.cpython-310.pyc
+│     └─ __init__.cpython-314.pyc
+├─ recon_system
+│  ├─ asgi.py
+│  ├─ settings.py
+│  ├─ urls.py
+│  ├─ wsgi.py
+│  ├─ __init__.py
+│  └─ __pycache__
+│     ├─ settings.cpython-310.pyc
+│     ├─ settings.cpython-314.pyc
+│     ├─ urls.cpython-310.pyc
+│     ├─ urls.cpython-314.pyc
+│     ├─ wsgi.cpython-310.pyc
+│     ├─ __init__.cpython-310.pyc
+│     └─ __init__.cpython-314.pyc
+└─ requirements.txt
+
+```
 
 ## Installation
 
@@ -200,3 +227,4 @@ Step-by-step wizard (embedded in Jazzmin layout):
 - Support custom sheet selection for multi-sheet Excel workbooks.
 - Add RBAC/permissions per config.
 - Dockerize the application.
+

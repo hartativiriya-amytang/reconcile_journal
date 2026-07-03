@@ -10,10 +10,9 @@ from django.db import transaction
 import pandas as pd
 
 from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema
-
+from rest_framework.permissions import IsAuthenticated, BasePermission
 from .models import (
     ReconciliationConfig, ReconciliationField, FieldMapping,
     ReconciliationRule, ReconciliationSession, ReconciliationResult
@@ -28,9 +27,21 @@ from .services.reconciliation import ReconciliationService
 from .services.excel_parser import ExcelParser
 from .services.export_excel import ExcelExporter
 
+FINANCE_GROUP_NAME = 'Finance'
+
+
+class IsFinanceGroup(BasePermission):
+    def has_permission(self, request, view):
+        if not request.user.is_authenticated:
+            return False
+        if request.user.is_superuser:
+            return True
+        return request.user.groups.filter(name=FINANCE_GROUP_NAME).exists()
+
 
 class ReconciliationConfigViewSet(viewsets.ModelViewSet):
     queryset = ReconciliationConfig.objects.all()
+    permission_classes = [IsAuthenticated, IsFinanceGroup]
     search_fields = ['name', 'description']
     filterset_fields = ['is_active']
     ordering = ['-created_at']
@@ -44,6 +55,7 @@ class ReconciliationConfigViewSet(viewsets.ModelViewSet):
 class ReconciliationFieldViewSet(viewsets.ModelViewSet):
     queryset = ReconciliationField.objects.all()
     serializer_class = ReconciliationFieldSerializer
+    permission_classes = [IsAuthenticated, IsFinanceGroup]
     search_fields = ['field_name']
     filterset_fields = ['config', 'data_type']
     ordering = ['sequence']
@@ -52,6 +64,7 @@ class ReconciliationFieldViewSet(viewsets.ModelViewSet):
 class FieldMappingViewSet(viewsets.ModelViewSet):
     queryset = FieldMapping.objects.all()
     serializer_class = FieldMappingSerializer
+    permission_classes = [IsAuthenticated, IsFinanceGroup]
     search_fields = ['excel_column']
     filterset_fields = ['config', 'file_type', 'field']
     ordering = ['id']
@@ -60,6 +73,7 @@ class FieldMappingViewSet(viewsets.ModelViewSet):
 class ReconciliationRuleViewSet(viewsets.ModelViewSet):
     queryset = ReconciliationRule.objects.all()
     serializer_class = ReconciliationRuleSerializer
+    permission_classes = [IsAuthenticated, IsFinanceGroup]
     filterset_fields = ['config', 'operator']
     ordering = ['sequence']
 
@@ -67,6 +81,7 @@ class ReconciliationRuleViewSet(viewsets.ModelViewSet):
 class ReconciliationSessionViewSet(viewsets.ModelViewSet):
     queryset = ReconciliationSession.objects.all()
     serializer_class = ReconciliationSessionSerializer
+    permission_classes = [IsAuthenticated, IsFinanceGroup]
     search_fields = ['file_a_name', 'file_b_name']
     filterset_fields = ['config', 'status']
     ordering_fields = ['created_at', 'matched', 'total_a']
@@ -172,13 +187,14 @@ class ReconciliationSessionViewSet(viewsets.ModelViewSet):
 class ReconciliationResultViewSet(viewsets.ModelViewSet):
     queryset = ReconciliationResult.objects.all()
     serializer_class = ReconciliationResultSerializer
+    permission_classes = [IsAuthenticated, IsFinanceGroup]
     filterset_fields = ['session', 'status']
     search_fields = ['match_key']
     ordering = ['-created_at']
 
 
-@extend_schema(request=BulkConfigSerializer, responses={201: ReconciliationConfigSerializer})
 @api_view(['POST'])
+@permission_classes([IsAuthenticated, IsFinanceGroup])
 def bulk_configure(request):
     serializer = BulkConfigSerializer(data=request.data)
     if not serializer.is_valid():
@@ -237,8 +253,8 @@ def bulk_configure(request):
     )
 
 
-@extend_schema(request=ReconcileSerializer, responses={201: ReconciliationSessionSerializer})
 @api_view(['POST'])
+@permission_classes([IsAuthenticated, IsFinanceGroup])
 def run_reconciliation(request):
     serializer = ReconcileSerializer(data=request.data)
     if not serializer.is_valid():
@@ -335,8 +351,8 @@ def run_reconciliation(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@extend_schema(request=None, responses={200: dict})
 @api_view(['GET'])
+@permission_classes([IsAuthenticated, IsFinanceGroup])
 def api_overview(request):
     return Response({
         'recon_system_api': 'Reconciliation System REST API',
@@ -350,7 +366,5 @@ def api_overview(request):
             'results': '/api/results/',
             'reconcile': '/api/reconcile/',
             'bulk_configure': '/api/bulk-configure/',
-            'schema': '/api/schema/',
-            'docs': '/api/docs/',
         }
     })

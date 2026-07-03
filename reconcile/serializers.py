@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from drf_spectacular.utils import extend_schema_field
 from .models import (
     ReconciliationConfig, ReconciliationField, FieldMapping,
     ReconciliationRule, ReconciliationSession, ReconciliationResult
@@ -35,11 +34,9 @@ class ReconciliationConfigSerializer(serializers.ModelSerializer):
         model = ReconciliationConfig
         fields = '__all__'
 
-    @extend_schema_field(int)
     def get_fields_count(self, obj):
         return obj.fields.count()
 
-    @extend_schema_field(int)
     def get_sessions_count(self, obj):
         return obj.reconciliationsession_set.count()
 
@@ -59,13 +56,11 @@ class ReconciliationSessionSerializer(serializers.ModelSerializer):
         model = ReconciliationSession
         fields = '__all__'
 
-    @extend_schema_field(float)
     def get_match_rate(self, obj):
         if obj.total_a > 0:
             return round((obj.matched / obj.total_a) * 100, 2)
         return 0
 
-    @extend_schema_field(int)
     def get_results_count(self, obj):
         return obj.results.count()
 
