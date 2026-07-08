@@ -1,230 +1,203 @@
-# Recon System
+# Aplikasi Rekonsiliasi Data (Django + DRF)
 
-## Overview
+Aplikasi backend untuk merekonsiliasi dua file Excel berdasarkan field/kriteria
+yang ditentukan user secara dinamis (maksimal 12 field). Tidak ada data yang
+disimpan ke database — proses murni: **upload -> proses di memory -> download hasil**.
 
-`recon_system` is a Django-based reconciliation system built to compare two Excel datasets and highlight matched versus unmatched records. It features a **full REST API** (built with Django REST Framework) and a **Jazzmin-powered ERP-style admin interface** with a dark theme.
+## Alur
 
-## Features
+1. User mendefinisikan daftar field yang mau direkonsiliasi (maks. 12), misalnya:
+   - A = Nomor Jurnal
+   - B = Keterangan
+   - C = Bulan
+   - D = Debit
+   - E = Kredit
 
-- **REST API** — Full CRUD for all models via DRF ViewSets with filtering, search, and pagination.
-- **ERP Admin Interface** — Jazzmin-themed Django admin (dark theme) with custom dashboard, stat cards, icons, and quick actions.
-- **Custom Web UI** — Step-by-step reconciliation wizard that embeds within the Jazzmin admin layout (configure fields → upload files → view results).
-- **API Documentation** — Auto-generated Swagger UI at `/api/docs/`.
-- **Bulk Configuration** — Create configs, fields, mappings, and rules in one API call.
-- **File Reconciliation** — Upload two Excel files and run matching via API or admin.
-- **Export** — Download matched, unmatched, and summary reports as Excel files.
-- **Admin Dashboard** — Custom Jazzmin admin home with stat counters, recent sessions table, and quick action links.
-- **Error Handling** — Failed reconciliation sessions capture and display error messages.
+   Untuk tiap field, user menyebutkan nama kolom sesuai yang ada di **File 1**
+   dan **File 2** (nama kolom boleh berbeda antar kedua file).
 
+2. User memilih field mana yang dipakai sebagai **kriteria pencocokan**
+   (`match_keys`), misalnya cocokkan berdasarkan Nomor Jurnal DAN Bulan.
 
-## Requirements
+3. User upload 2 file Excel (`file1`, `file2`).
 
-- Python 3.10+
-- Django >=4.2
-- djangorestframework >=3.15
-- django-jazzmin >=3.0
-- django-cors-headers >=4.0
-- django-filter >=23.0
-- drf-spectacular >=0.27
-- pandas >=2.0
-- openpyxl >=3.1
+4. Sistem melakukan reconcile dan menyediakan pilihan hasil:
+   - `matched` — irisan data yang cocok di kedua file
+   - `unmatched_file1` — data yang hanya ada di File 1
+   - `unmatched_file2` — data yang hanya ada di File 2
+   - `all` — mengembalikan ketiganya + ringkasan sekaligus dalam 1 file `.zip`
 
-## Project Structure
-```
-recon_system
-├─ db.sqlite3
-├─ docs
-│  ├─ usage.md
-│  └─ user_roles.md
-├─ manage.py
-├─ README.md
-├─ reconcile
-│  ├─ admin.py
-│  ├─ api_urls.py
-│  ├─ api_views.py
-│  ├─ apps.py
-│  ├─ migrations
-│  │  ├─ 0001_initial.py
-│  │  ├─ 0002_fieldmapping_reconciliationrule_and_more.py
-│  │  ├─ __init__.py
-│  │  └─ __pycache__
-│  │     ├─ 0001_initial.cpython-310.pyc
-│  │     ├─ 0002_fieldmapping_reconciliationrule_and_more.cpython-310.pyc
-│  │     └─ __init__.cpython-310.pyc
-│  ├─ models.py
-│  ├─ serializers.py
-│  ├─ services
-│  │  ├─ excel_parser.py
-│  │  ├─ export_excel.py
-│  │  ├─ reconciliation.py
-│  │  ├─ rule_engine.py
-│  │  └─ __pycache__
-│  │     ├─ excel_parser.cpython-310.pyc
-│  │     ├─ export_excel.cpython-310.pyc
-│  │     ├─ reconciliation.cpython-310.pyc
-│  │     └─ rule_engine.cpython-310.pyc
-│  ├─ tests.py
-│  ├─ utils
-│  │  └─ dataframe.py
-│  ├─ __init__.py
-│  └─ __pycache__
-│     ├─ admin.cpython-310.pyc
-│     ├─ admin.cpython-314.pyc
-│     ├─ api_urls.cpython-310.pyc
-│     ├─ api_views.cpython-310.pyc
-│     ├─ apps.cpython-310.pyc
-│     ├─ apps.cpython-314.pyc
-│     ├─ context_processors.cpython-310.pyc
-│     ├─ models.cpython-310.pyc
-│     ├─ models.cpython-314.pyc
-│     ├─ serializers.cpython-310.pyc
-│     ├─ urls.cpython-310.pyc
-│     ├─ urls.cpython-314.pyc
-│     ├─ views.cpython-310.pyc
-│     ├─ views.cpython-314.pyc
-│     ├─ __init__.cpython-310.pyc
-│     └─ __init__.cpython-314.pyc
-├─ recon_system
-│  ├─ asgi.py
-│  ├─ settings.py
-│  ├─ urls.py
-│  ├─ wsgi.py
-│  ├─ __init__.py
-│  └─ __pycache__
-│     ├─ settings.cpython-310.pyc
-│     ├─ settings.cpython-314.pyc
-│     ├─ urls.cpython-310.pyc
-│     ├─ urls.cpython-314.pyc
-│     ├─ wsgi.cpython-310.pyc
-│     ├─ __init__.cpython-310.pyc
-│     └─ __init__.cpython-314.pyc
-└─ requirements.txt
+## Autentikasi (akses khusus staff)
 
-```
+Halaman `/` dan seluruh endpoint `/api/*` sekarang **wajib login** dan
+**wajib punya role staff** (flag bawaan Django `is_staff`):
 
-## Installation
+- Belum login → otomatis diarahkan ke `/accounts/login/`, lalu setelah
+  login sukses langsung diarahkan kembali ke `/` (halaman recon).
+- Login tapi bukan staff → dapat pesan 403 (Forbidden), tidak bisa akses
+  form maupun API.
+- Login sebagai staff → langsung dapat halaman recon dan bisa memanggil
+  API-nya.
+- Logout tersedia lewat tombol "Logout" di pojok kanan atas halaman recon.
 
-```bash
-git clone <repo-url> recon_system
-cd recon_system
-python -m venv .venv
-
-# Windows
-.venv\Scripts\activate
-
-# macOS / Linux
-source .venv/bin/activate
-
-pip install -r requirements.txt
-python manage.py migrate
-```
-
-## Running the App
-
-```bash
-python manage.py runserver
-```
-
-Open in browser:
-
-| Page | URL |
-|---|---|
-| Admin Interface (default home) | http://127.0.0.1:8000/admin/ |
-| Custom Web UI | http://127.0.0.1:8000/reconcile/ |
-| API Docs (Swagger) | http://127.0.0.1:8000/api/docs/ |
-| API Root | http://127.0.0.1:8000/api/ |
-
-### Create Admin User (first time)
+Untuk membuat akun staff pertama:
 
 ```bash
 python manage.py createsuperuser
-# follow prompts to set username, email, and password
 ```
 
-## Usage
+(superuser otomatis `is_staff=True`). Untuk staff biasa (bukan superuser),
+login dulu ke `/admin/` pakai superuser tadi, lalu buat User baru dan
+centang **"Staff status"** di halaman edit user — tanpa perlu akses admin
+apa pun selain untuk membuat akun, staff tersebut hanya akan bisa membuka
+halaman recon (bukan `/admin/` penuh, kecuali diberi permission tambahan).
 
-### Admin Interface (`/admin/`) — Default Home
+## Instalasi
 
-Full management with Jazzmin dark theme:
+```bash
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py createsuperuser   # buat akun staff pertama
+python manage.py runserver
+```
 
-- Custom dashboard with stat cards (configs, sessions, rules, results), recent sessions table, and quick action links.
-- Create and manage **Configurations** with inline fields, mappings, and rules.
-- Upload files via **Sessions** with status badges (Pending / Processing / Completed / Failed).
-- View match rate percentages with color coding (green ≥80%, orange ≥50%, red <50%).
-- Download matched, unmatched, and summary Excel exports directly from the session list.
-- Failed sessions display error messages in a collapsible fieldset.
+Server berjalan di `http://127.0.0.1:8000/`. Halaman yang tersedia:
 
-### Custom Web UI (`/reconcile/`)
+| URL                     | Isi                                                             |
+|-------------------------|------------------------------------------------------------------|
+| `/`                     | Halaman web untuk upload & reconcile (perlu login staff)         |
+| `/accounts/login/`      | Halaman login                                                    |
+| `/accounts/logout/`     | Logout (dipanggil lewat tombol di halaman recon)                 |
+| `/docs/`                | Dokumentasi API interaktif (Swagger, juga perlu login staff)      |
+| `/api/schema/`          | Raw OpenAPI schema (JSON)                                        |
+| `/api/config-info/`     | Info skema config & contoh payload (perlu login staff)           |
+| `/api/reconcile/`       | Endpoint utama upload + proses + download hasil (perlu login staff) |
+| `/admin/`               | Django admin bawaan, untuk kelola akun staff                      |
 
-Step-by-step wizard (embedded in Jazzmin layout):
+> Catatan: `/admin/` butuh `python manage.py migrate` supaya tabel session/auth
+> tersedia — fitur reconcile sendiri (`/api/reconcile/`) tidak menyentuh
+> database untuk **datanya** (Excel yang diupload tetap diproses murni di
+> memory), database hanya dipakai untuk data login/session.
 
-1. **Configure Fields** — define field names, data types, Excel column mappings, and matching criteria (max 12 fields).
-2. **Upload Files** — upload two Excel files (.xlsx / .xls) with the mapped columns.
-3. **View Results** — see matched/unmatched records and download reports (matched, unmatched, summary).
+## Endpoint
 
-### REST API (`/api/`)
+### `GET /api/config-info/`
+Endpoint bantu untuk frontend: mengembalikan skema config yang diharapkan,
+batas maksimal field, dan opsi output — supaya frontend tidak perlu hardcode.
 
-| Endpoint | Method | Description |
-|---|---|---|
-| `/api/` | GET | API overview |
-| `/api/configs/` | GET/POST | List/create configurations |
-| `/api/configs/{id}/` | GET/PUT/PATCH/DELETE | CRUD configuration |
-| `/api/fields/` | GET/POST | List/create fields |
-| `/api/mappings/` | GET/POST | List/create mappings |
-| `/api/rules/` | GET/POST | List/create rules |
-| `/api/sessions/` | GET/POST | List/create sessions |
-| `/api/sessions/{id}/results/` | GET | Session results (filter by `?status=MATCH`) |
-| `/api/sessions/{id}/download_matched/` | GET | Download matched Excel |
-| `/api/sessions/{id}/download_unmatched/` | GET | Download unmatched Excel (multi-sheet) |
-| `/api/sessions/{id}/download_summary/` | GET | Download summary Excel |
-| `/api/results/` | GET/POST | List/create results |
-| `/api/bulk-configure/` | POST | Create config + fields + mappings + rules in one call |
-| `/api/reconcile/` | POST | Upload files and run reconciliation |
-| `/api/schema/` | GET | OpenAPI schema (JSON) |
-| `/api/docs/` | GET | Swagger UI documentation |
+### `POST /api/reconcile/`
+`multipart/form-data` dengan 3 field:
 
-## App Components
+| Field    | Tipe        | Keterangan                                   |
+|----------|-------------|-----------------------------------------------|
+| `file1`  | file        | File Excel pertama (.xlsx/.xls)               |
+| `file2`  | file        | File Excel kedua (.xlsx/.xls)                 |
+| `config` | text (JSON) | Definisi field & kriteria (lihat contoh)      |
 
-### `reconcile` app
+Contoh isi `config`:
 
-- `models.py` — 6 models: `ReconciliationConfig`, `ReconciliationField`, `FieldMapping`, `ReconciliationRule`, `ReconciliationSession`, `ReconciliationResult`. Session stores file paths as `CharField` (not `FileField`) plus display names and optional error messages.
-- `serializers.py` — DRF serializers for all models, including `BulkConfigSerializer` and `ReconcileSerializer` for custom endpoints.
-- `api_views.py` — ViewSets with full CRUD, filtering, search, pagination, plus custom `reconcile`, `bulk-configure`, and `download_*` actions.
-- `api_urls.py` — API routing via DRF `DefaultRouter`.
-- `admin.py` — Jazzmin-enhanced admin with inline editing, status badges, match rate colors, action buttons (download links), collapsible error fieldsets, and custom list displays.
-- `context_processors.py` — Provides `dashboard_stats` context (config/session/rule/result counts, recent sessions) for the Jazzmin admin home.
-- `views.py` — Custom web UI wizard (configure → upload → results), now embedded within the Jazzmin admin layout.
-- `urls.py` — Custom web UI routes.
+```json
+{
+  "fields": [
+    {"key": "A", "label": "Nomor Jurnal", "file1_column": "No Jurnal", "file2_column": "NoJurnal"},
+    {"key": "B", "label": "Keterangan",   "file1_column": "Keterangan", "file2_column": "Description"},
+    {"key": "C", "label": "Bulan",        "file1_column": "Bulan", "file2_column": "Month"},
+    {"key": "D", "label": "Debit",        "file1_column": "Debit", "file2_column": "Debit"},
+    {"key": "E", "label": "Kredit",       "file1_column": "Kredit", "file2_column": "Kredit"}
+  ],
+  "match_keys": ["A", "C"],
+  "output": "all",
+  "case_sensitive": false,
+  "trim_whitespace": true
+}
+```
 
-### Services
+Keterangan opsi tambahan:
+- `output`: `"matched"` | `"unmatched_file1"` | `"unmatched_file2"` | `"all"` (default `"all"`)
+- `case_sensitive`: apakah pencocokan teks memperhatikan huruf besar/kecil (default `false`)
+- `trim_whitespace`: apakah spasi di awal/akhir nilai diabaikan saat pencocokan (default `true`)
 
-| Service | Description |
-|---|---|
-| `services/excel_parser.py` | Validate and read Excel files with pandas |
-| `services/reconciliation.py` | Orchestrate file parsing, matching, and result persistence |
-| `services/rule_engine.py` | Build match keys and compare records |
-| `services/export_excel.py` | Generate Excel export responses |
+Setiap field juga punya opsi (relevan untuk field yang dipakai di `match_keys`):
+- `match_type`: `"text"` (default) | `"number"` | `"date"`. Gunakan `"number"`
+  untuk kolom jumlah (Debit/Kredit/Bruto/DPP dst.) supaya `1000`, `1000.0`,
+  dan `"1000"` dianggap sama. Gunakan `"date"` kalau kolom di kedua file
+  berupa tanggal tapi formatnya berbeda (misal satu file kolom tanggal asli
+  Excel, file lain teks `"05/01/2024"`) — keduanya akan dinormalisasi ke
+  format yang sama sebelum dibandingkan.
+- `date_format`: opsional, pola `strptime` (misal `"%m/%d/%Y"` atau
+  `"%d/%m/%Y"`) untuk menghilangkan ambiguitas kalau kolom tanggal berupa
+  teks. Kalau dikosongkan, sistem mencoba menebak formatnya otomatis.
 
-### Utilities
+> **Penting soal keunikan kriteria pencocokan:** proses ini melakukan
+> equi-join standar (mirip VLOOKUP/JOIN SQL). Kalau kriteria yang dipilih
+> tidak cukup unik (misal cuma "jumlah" saja, dan ada beberapa baris dengan
+> jumlah yang sama persis di kedua file), satu baris bisa cocok dengan lebih
+> dari satu baris di file lain, sehingga jumlah baris "matched" bisa lebih
+> banyak dari jumlah baris asli. Pilih kombinasi field yang benar-benar unik
+> per transaksi (misal nomor dokumen + tanggal + jumlah) untuk hasil yang akurat.
 
-| Utility | Description |
-|---|---|
-| `utils/dataframe.py` | DataFrame cleanup, header validation, serialization, and merging |
+Contoh `curl`:
 
-## Notes
+> Karena endpoint ini sekarang butuh login staff, contoh `curl` di bawah
+> hanya akan berhasil kalau kamu sudah punya cookie sesi yang valid (login
+> dulu lewat browser, atau lakukan login+ambil CSRF token secara manual).
+> Untuk mencoba paling gampang, pakai halaman `/` di browser saja setelah
+> login — itu sudah otomatis mengurus session & CSRF token untukmu.
 
-- Uploaded Excel column headers must match the configured field mappings.
-- File uploads are stored via Django default storage (paths stored as `CharField` in sessions).
-- Results are persisted in SQLite by default.
-- Maximum 12 fields per configuration, with at least 1 matching field required.
-- Failed sessions capture error messages for debugging.
-- The root URL (`/`) redirects to the admin interface.
+```bash
+curl -X POST http://127.0.0.1:8000/api/reconcile/ \
+  -F "file1=@data_file1.xlsx" \
+  -F "file2=@data_file2.xlsx" \
+  -F 'config={
+        "fields": [
+          {"key":"A","label":"Nomor Jurnal","file1_column":"No Jurnal","file2_column":"NoJurnal"},
+          {"key":"C","label":"Bulan","file1_column":"Bulan","file2_column":"Month"}
+        ],
+        "match_keys": ["A","C"],
+        "output": "all"
+      }' \
+  -o hasil_rekonsiliasi.zip
+```
 
-## Suggested Improvements
+Jika `output` = `"all"`, respons berupa file `.zip` berisi:
+- `ringkasan.xlsx` — rekap jumlah baris cocok / tidak cocok
+- `matched.xlsx`
+- `unmatched_file1.xlsx`
+- `unmatched_file2.xlsx`
 
-- Add unit tests for service modules, serializers, and API views.
-- Add Celery/background tasks for async file reconciliation.
-- Support custom sheet selection for multi-sheet Excel workbooks.
-- Add RBAC/permissions per config.
-- Dockerize the application.
+Jika `output` diisi salah satu dari `matched` / `unmatched_file1` / `unmatched_file2`,
+respons langsung berupa 1 file `.xlsx` sesuai pilihan tersebut.
 
+## Catatan implementasi
+
+- **Tidak ada penyimpanan ke database.** Kedua file Excel dibaca langsung ke
+  `pandas.DataFrame` di memory (`reconciliation/services.py`), diproses, lalu
+  hasilnya di-stream langsung sebagai response (`FileResponse`) — tidak pernah
+  ditulis ke disk server maupun ke DB.
+- Validasi jumlah field (maks. 12), keunikan `key`, dan konsistensi `match_keys`
+  ada di `reconciliation/serializers.py`.
+- Pencocokan dilakukan dengan `pandas.merge(..., how="outer", indicator=True)`
+  sehingga bisa langsung diklasifikasi jadi `both` (matched), `left_only`
+  (hanya file1), `right_only` (hanya file2).
+- Nilai yang dipakai sebagai kriteria pencocokan dinormalisasi dulu (trim
+  spasi + lowercase, bisa dimatikan lewat `case_sensitive`/`trim_whitespace`)
+  supaya perbedaan spasi/huruf besar-kecil tidak dianggap tidak cocok.
+
+## Struktur proyek
+
+```
+rekonsiliasi_project/
+├── manage.py
+├── requirements.txt
+├── config/                 # Django project settings
+│   ├── settings.py
+│   ├── urls.py
+│   └── wsgi.py
+└── reconciliation/          # App utama
+    ├── serializers.py       # Validasi config (fields, match_keys, output)
+    ├── services.py          # Logika reconcile pakai pandas (stateless)
+    ├── views.py              # Endpoint /api/reconcile/ dan /api/config-info/
+    └── urls.py
+```
